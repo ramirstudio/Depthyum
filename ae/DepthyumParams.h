@@ -19,6 +19,19 @@ enum {
     P_SMOOTH,
     P_DEPTH_TOPIC_END,
 
+    P_SCAN_TOPIC,
+    P_SCAN_SPEED,
+    P_SCAN_PHASE,
+    P_SCAN_FREQ,
+    P_SCAN_SHAPE,
+    P_SCAN_SHARP,
+    P_SCAN_COLOR_A,
+    P_SCAN_COLOR_B,
+    P_SCAN_GAIN,
+    P_SCAN_GLOW,
+    P_SCAN_GLOW_RADIUS,
+    P_SCAN_TOPIC_END,
+
     P_TIME_TOPIC,
     P_STABILITY,
     P_TOLERANCE,
@@ -61,7 +74,19 @@ enum {
     ID_GPU,
     ID_COLOR_MODE,
     ID_AI_TOPIC_END,
-    ID_KEEP_ALPHA
+    ID_KEEP_ALPHA,
+    ID_SCAN_TOPIC,
+    ID_SCAN_SPEED,
+    ID_SCAN_PHASE,
+    ID_SCAN_FREQ,
+    ID_SCAN_SHAPE,
+    ID_SCAN_SHARP,
+    ID_SCAN_COLOR_A,
+    ID_SCAN_COLOR_B,
+    ID_SCAN_GAIN,
+    ID_SCAN_GLOW,
+    ID_SCAN_GLOW_RADIUS,
+    ID_SCAN_TOPIC_END
 };
 
 // Largest Stability value: frames on each side of the current one that can take part.

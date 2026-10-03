@@ -24,6 +24,10 @@ The range is shared because the model's scale and offset change from frame to fr
 
 Parameters have indices in panel order (`DepthyumParams.h`) and stable disk IDs, always appended at the end. The PiPL is pre-generated in `DepthyumPiPL.rc` as in Lensyum and must be kept consistent with the flags in `GlobalSetup`. The plug-in looks for `depthyum_ort.dll` and `depthyum_depth.onnx` next to the `.aex`; if either is missing the frame comes out solid red and the reason is written to `%TEMP%\depthyum_log.txt`.
 
+## Depth scan
+
+`scanWave` in `Output.h` maps a depth value d (0 far, 1 near) to `shape(frac(d * frequency + phase))`, with phase = Phase angle / 360 + Speed * layer time in seconds. Because the argument only goes through `frac`, adding a whole cycle to the phase gives the same image, so the loop is exact. The output depends on the layer time with nothing else changing, so the effect carries `PF_OutFlag_NON_PARAM_VARY`; without it After Effects could reuse a cached frame on a still layer. Scan Color multiplies the layer luminance by a colour interpolated between the two colours with the wave as the weight, then adds a box-blurred copy (three passes) for the glow.
+
 ## Build
 
 CMake builds `depthyum_core`, `depthyum_cli`, `depthyum_tests` and, with `AE_SDK_DIR`, the `.aex` (MSVC/Windows only). `ORT_INCLUDE_DIR` enables AI depth; without it the network functions return an error unless a test backend is installed with `depthAISetBackend`.

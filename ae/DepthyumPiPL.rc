@@ -60,7 +60,7 @@ BEGIN
         "OLGe",             /* global out flags */
         0L,
         4L,
-        33554434L,          /* DEEP_COLOR_AWARE | WIDE_TIME_INPUT */
+        33554438L,          /* DEEP_COLOR_AWARE | WIDE_TIME_INPUT | NON_PARAM_VARY */
 
         "MIB8",
         "2LGe",             /* global out flags 2 */

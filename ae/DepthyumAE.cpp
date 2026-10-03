@@ -50,7 +50,7 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
     PF_ParamDef def;
 
     AEFX_CLR_STRUCT(def);
-    PF_ADD_POPUP("Output", 4, 1, "Depth Map|Colormap|Overlay|Source", ID_VIEW);
+    PF_ADD_POPUP("Output", 6, 1, "Depth Map|Colormap|Overlay|Source|Depth Scan|Scan Color", ID_VIEW);
 
     AEFX_CLR_STRUCT(def);
     PF_ADD_TOPIC("Depth", ID_DEPTH_TOPIC);
@@ -74,6 +74,33 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
     PF_ADD_FLOAT_SLIDERX("Smooth (px)", 0, 100, 0, 60, 0, PF_Precision_TENTHS, PF_ValueDisplayFlag_NONE, 0, ID_SMOOTH);
     AEFX_CLR_STRUCT(def);
     PF_END_TOPIC(ID_DEPTH_TOPIC_END);
+
+    // Depth Scan: a wave over depth whose phase moves with time. Used by the Depth Scan and
+    // Scan Color outputs.
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_TOPIC("Scan", ID_SCAN_TOPIC);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Speed (cycles/s)", -8, 8, -2, 2, 0.5, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0, ID_SCAN_SPEED);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_ANGLE("Phase", 0, ID_SCAN_PHASE);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Frequency", 0.1, 16, 0.25, 8, 1, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0, ID_SCAN_FREQ);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POPUP("Shape", 3, 1, "Sine|Triangle|Sawtooth", ID_SCAN_SHAPE);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Sharpness", 0, 100, 0, 100, 0, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_SCAN_SHARP);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_COLOR("Dark Color", 30, 50, 255, ID_SCAN_COLOR_A);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_COLOR("Lit Color", 255, 40, 30, ID_SCAN_COLOR_B);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Gain", 0, 10, 0, 4, 1.5, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0, ID_SCAN_GAIN);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Glow", 0, 5, 0, 2, 0.6, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0, ID_SCAN_GLOW);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Glow Radius (px)", 1, 400, 2, 100, 20, PF_Precision_TENTHS, PF_ValueDisplayFlag_NONE, 0, ID_SCAN_GLOW_RADIUS);
+    AEFX_CLR_STRUCT(def);
+    PF_END_TOPIC(ID_SCAN_TOPIC_END);
 
     AEFX_CLR_STRUCT(def);
     PF_ADD_TOPIC("Temporal", ID_TIME_TOPIC);
@@ -122,10 +149,21 @@ public:
         case PF_Param_SLIDER: v = p.u.sd.value; break;
         case PF_Param_POPUP: v = p.u.pd.value; break;
         case PF_Param_CHECKBOX: v = p.u.bd.value; break;
+        case PF_Param_ANGLE: v = FIX_2_FLOAT(p.u.ad.value); break; // degrees, revolutions included
         default: break;
         }
         checkin(p);
         return v;
+    }
+    // Colour parameter as display-referred 0..1 RGB.
+    void color(int index, float* rgb) {
+        rgb[0] = rgb[1] = rgb[2] = 0;
+        PF_ParamDef p;
+        if (!checkout(index, p)) return;
+        rgb[0] = p.u.cd.value.red / static_cast<float>(PF_MAX_CHAN8);
+        rgb[1] = p.u.cd.value.green / static_cast<float>(PF_MAX_CHAN8);
+        rgb[2] = p.u.cd.value.blue / static_cast<float>(PF_MAX_CHAN8);
+        checkin(p);
     }
 
 private:
@@ -385,6 +423,18 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
         adj.gamma = static_cast<float>(pr.num(P_CONTRAST));
         adj.shift = static_cast<float>(pr.num(P_SHIFT) / 100.0);
         const double smoothPx = pr.num(P_SMOOTH);
+        // Scan: the phase is the Phase angle plus Speed times the layer time, in cycles.
+        const double layerSeconds = static_cast<double>(in_data->current_time) / std::max<double>(static_cast<double>(in_data->time_scale), 1.0);
+        const double scanPhase = pr.num(P_SCAN_PHASE) / 360.0 + pr.num(P_SCAN_SPEED) * layerSeconds;
+        const float scanFreq = static_cast<float>(pr.num(P_SCAN_FREQ));
+        const int scanShape = std::min(std::max(static_cast<int>(pr.num(P_SCAN_SHAPE)) - 1, 0), 2);
+        const float scanSharp = static_cast<float>(pr.num(P_SCAN_SHARP) / 100.0);
+        float scanColA[3], scanColB[3];
+        pr.color(P_SCAN_COLOR_A, scanColA);
+        pr.color(P_SCAN_COLOR_B, scanColB);
+        const float scanGain = static_cast<float>(pr.num(P_SCAN_GAIN));
+        const float scanGlow = static_cast<float>(pr.num(P_SCAN_GLOW));
+        const double glowRadiusPx = pr.num(P_SCAN_GLOW_RADIUS);
         TemporalParams tp;
         tp.tolerance = static_cast<float>(0.01 + 0.29 * pr.num(P_TOLERANCE) / 100.0);
         tp.detectCuts = pr.num(P_CUTS) != 0;
@@ -397,6 +447,7 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
 
         const int W = in.width(), H = in.height();
         const double dsx = ratio(in_data->downsample_x);
+        const int glowRadius = std::max(1, static_cast<int>(std::lround(glowRadiusPx * dsx)));
         // Layer area inside the buffer (the buffer may carry more than the layer).
         const int lx0 = std::max(0, static_cast<int>(-prd->inRect.left));
         const int ly0 = std::max(0, static_cast<int>(-prd->inRect.top));
@@ -472,6 +523,38 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
             }
         }
 
+        // Depth Scan / Scan Color: a wave over depth, shifted by the phase at this time. The wave is
+        // the grey output; the colour output tints the picture's own luminance with it and adds a glow.
+        std::vector<float> scanMask;
+        std::vector<float> scanRgb;
+        if (!err && !aiFailed && !depth.empty() && (view == 4 || view == 5)) {
+            scanMask.resize(depth.size());
+            parallelFor(ch, [&](int y) {
+                for (int x = 0; x < cw; ++x) {
+                    const size_t i = static_cast<size_t>(y) * cw + x;
+                    scanMask[i] = scanWave(depth[i], scanFreq, scanPhase, scanShape, scanSharp);
+                }
+            });
+            if (view == 5) {
+                scanRgb.resize(static_cast<size_t>(cw) * ch * 3);
+                parallelFor(ch, [&](int y) {
+                    for (int x = 0; x < cw; ++x) {
+                        const size_t i = static_cast<size_t>(y) * cw + x;
+                        const float* p = &rgb[i * 3];
+                        const float lum = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+                        const float m = scanMask[i];
+                        for (int k = 0; k < 3; ++k)
+                            scanRgb[i * 3 + k] = lum * scanGain * (scanColA[k] * (1.0f - m) + scanColB[k] * m);
+                    }
+                });
+                if (scanGlow > 0.0f) {
+                    std::vector<float> glow(scanRgb);
+                    boxBlurImage(glow, cw, ch, 3, glowRadius);
+                    for (size_t i = 0; i < scanRgb.size(); ++i) scanRgb[i] += scanGlow * glow[i];
+                }
+            }
+        }
+
         if (!err) {
             const A_long ox = prd->outRect.left - prd->inRect.left;
             const A_long oy = prd->outRect.top - prd->inRect.top;
@@ -491,7 +574,7 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
                         } else if (aiFailed) {
                             // Missing runtime or model: a flat red frame, so it cannot be taken for a result.
                             o[0] = a; o[3] = a;
-                        } else if (inLayer && !depth.empty()) {
+                        } else if (inLayer && !depth.empty() && (view < 4 || !scanMask.empty())) {
                             const size_t i = static_cast<size_t>(ly) * cw + lx;
                             const float d = depth[i];
                             float c[3];
@@ -499,6 +582,12 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
                                 // Depth is data: written as is, at every bit depth.
                                 const float v = zEncoding ? zDistanceNormalised(d, nearM, farM) : d;
                                 c[0] = c[1] = c[2] = v;
+                            } else if (view == 4) {
+                                c[0] = c[1] = c[2] = scanMask[i]; // data, like the depth map
+                            } else if (view == 5) {
+                                for (int k = 0; k < 3; ++k) c[k] = scanRgb[i * 3 + k];
+                                if (linear)
+                                    for (int k = 0; k < 3; ++k) c[k] = srgbDecode(std::max(c[k], 0.0f));
                             } else {
                                 depthColor(d, c);
                                 if (view == 2)
@@ -529,8 +618,9 @@ PF_Err GlobalSetup(PF_InData* in_data, PF_OutData* out_data) {
     out_data->my_version = PF_VERSION(DEPTHYUM_MAJOR, DEPTHYUM_MINOR, DEPTHYUM_BUG, PF_Stage_RELEASE, DEPTHYUM_BUILD);
     // Must match AE_Effect_Global_OutFlags / _2 in DepthyumPiPL.r (and the 'global out flags' values in DepthyumPiPL.rc).
     // WIDE_TIME_INPUT: the render reads the layer at neighbouring times, so After Effects must not
-    // reuse a cached frame when only a neighbour changed.
-    out_data->out_flags = PF_OutFlag_DEEP_COLOR_AWARE | PF_OutFlag_WIDE_TIME_INPUT;
+    // reuse a cached frame when only a neighbour changed. NON_PARAM_VARY: the scan moves with time
+    // even when no parameter and no source pixel changes (a still image).
+    out_data->out_flags = PF_OutFlag_DEEP_COLOR_AWARE | PF_OutFlag_WIDE_TIME_INPUT | PF_OutFlag_NON_PARAM_VARY;
     out_data->out_flags2 = PF_OutFlag2_SUPPORTS_SMART_RENDER | PF_OutFlag2_FLOAT_COLOR_AWARE |
                            PF_OutFlag2_SUPPORTS_THREADED_RENDERING;
     return PF_Err_NONE;

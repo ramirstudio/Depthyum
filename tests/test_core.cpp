@@ -206,6 +206,38 @@ void testOutputs() {
     CHECK(c1[0] > c1[2]);                                         // near is red
 }
 
+void testScan() {
+    // Loops exactly: one more cycle of phase gives the same wave, at every depth.
+    for (int shape = 0; shape < 3; ++shape)
+        for (float d = 0.0f; d <= 1.0f; d += 0.1f) {
+            CHECK_NEAR(scanWave(d, 1.5f, 0.3, shape, 0.2f), scanWave(d, 1.5f, 1.3, shape, 0.2f), 1e-4);
+            CHECK_NEAR(scanWave(d, 1.0f, 0.3, shape, 0.0f), scanWave(d, 1.0f, -2.7, shape, 0.0f), 1e-4);
+        }
+    // Range, and the peak sits where the phase puts it.
+    for (float d = 0.0f; d <= 1.0f; d += 0.05f) {
+        const float v = scanWave(d, 2.0f, 0.1, kScanSine, 0.5f);
+        CHECK(v >= 0.0f && v <= 1.0f);
+    }
+    CHECK_NEAR(scanWave(0.5f, 1.0f, 0.0, kScanSine, 0.0f), 1.0, 1e-5);   // u = 0.5
+    CHECK_NEAR(scanWave(0.0f, 1.0f, 0.0, kScanSine, 0.0f), 0.0, 1e-5);   // u = 0
+    CHECK_NEAR(scanWave(0.5f, 1.0f, 0.0, kScanTriangle, 0.0f), 1.0, 1e-5);
+    // Advancing the phase moves the peak from near towards far (smaller d).
+    CHECK(scanWave(0.3f, 1.0f, 0.2, kScanSine, 0.0f) > scanWave(0.3f, 1.0f, 0.0, kScanSine, 0.0f));
+    // Sharpness narrows the band: below the midpoint gets darker, above gets brighter.
+    CHECK(scanWave(0.1f, 1.0f, 0.0, kScanSine, 0.9f) < scanWave(0.1f, 1.0f, 0.0, kScanSine, 0.0f));
+    CHECK(scanWave(0.3f, 1.0f, 0.0, kScanSine, 0.9f) > scanWave(0.3f, 1.0f, 0.0, kScanSine, 0.0f));
+    // Blur keeps a constant image constant and conserves the mean of an impulse away from the edges.
+    std::vector<float> flat(20 * 10 * 3, 0.4f);
+    boxBlurImage(flat, 20, 10, 3, 3);
+    for (float v : flat) CHECK_NEAR(v, 0.4, 1e-5);
+    std::vector<float> dot(41 * 41, 0.0f);
+    dot[20 * 41 + 20] = 1.0f;
+    boxBlurImage(dot, 41, 41, 1, 3);
+    double sum = 0; for (float v : dot) sum += v;
+    CHECK_NEAR(sum, 1.0, 1e-4);
+    CHECK(dot[20 * 41 + 20] < 0.1f && dot[20 * 41 + 20] > 0.0f);
+}
+
 void testResampleAndAdjust() {
     std::vector<float> small = {0, 1, 0, 1}, big;
     resampleDepth(small, 2, 2, big, 8, 8);
@@ -233,6 +265,7 @@ int main() {
     testFuseStopsAtCutsAndGaps();
     testDeterministicOrder();
     testOutputs();
+    testScan();
     testResampleAndAdjust();
     depthAISetBackend(nullptr);
     if (g_failed) { std::printf("%d check(s) failed\n", g_failed); return 1; }

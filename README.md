@@ -10,9 +10,11 @@ A depth network sees one frame at a time, and its output has its own scale and o
 
 ## Controls
 
-Output: Depth Map (grey), Colormap (blue far, red near), Overlay (picture and colormap half and half) or Source, to compare.
+Output: Depth Map (grey), Colormap (blue far, red near), Overlay (picture and colormap half and half), Source (to compare), Depth Scan or Scan Color (see below).
 
 Depth: Encoding is Disparity (white is near, the usual format of AI depth maps) or Z Distance (white is far, with Near and Far Distance in metres giving the 1/z spacing of a real camera). Invert flips the map. Far Cut and Near Cut clip the ends, Contrast and Shift redistribute it, Smooth blurs it in pixels.
+
+Scan: the depth becomes a wave whose phase moves with time, so a band of the picture lights up and travels from near to far, wraps around and starts again. Depth Scan outputs the wave in grey, to use as a matte or a map. Scan Color tints the picture's own luminance with it: Dark Color where the wave is low, Lit Color where it is high, then Gain and a Glow of the chosen radius. Speed is in cycles per second (negative runs from far to near) and Phase is an angle you can keyframe or drive with an expression; the scan is a function of the layer time, so with a Speed that is a whole number of cycles over the layer's length it loops exactly. Frequency is how many waves fit across the depth range, Shape is Sine, Triangle or Sawtooth, and Sharpness narrows the lit band. The scan works on a still image too.
 
 Temporal: Stability is the number of frames on each side that take part (0 turns it off; more is steadier and slower the first time a frame is rendered). Motion Tolerance sets how different a neighbour's depth may be before it stops counting: low keeps moving edges sharp, high smooths harder. Detect Cuts stops the window at a change of shot.
 
