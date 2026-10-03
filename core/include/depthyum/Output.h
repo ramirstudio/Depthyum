@@ -53,6 +53,37 @@ inline float scanWave(float d, float freq, double phase, int shape, float sharp)
     return clampv((w - 0.5f) * k + 0.5f, 0.0f, 1.0f);
 }
 
+// Focus band: 1 at distance `centre` (depth 0..1, 1 = near), falling to 0 over `soft` beyond half
+// the band's `width`. With wrap the distance goes round the depth range, so a band that is
+// travelling through depth leaves at one end and re-enters at the other.
+inline float bandMask(float d, float centre, float width, float soft, bool wrap) {
+    float dist = std::fabs(d - centre);
+    if (wrap) dist = std::min(dist, 1.0f - dist);
+    const float half = 0.5f * std::max(width, 0.0f);
+    if (dist <= half) return 1.0f;
+    if (soft <= 1e-6f) return 0.0f;
+    const float t = clampv((dist - half) / soft, 0.0f, 1.0f);
+    return 1.0f - t * t * (3.0f - 2.0f * t);
+}
+
+// Tone for depth d (0..1) from 8 control points spaced evenly over the depth range. Linear between
+// them, or a Catmull-Rom spline through them (smooth) clamped to 0..1. A curve with several peaks
+// and valleys picks out several distances at once; a steep stretch spreads a thin slice of depth over
+// the whole tonal range, which is what makes the shape of things inside that slice show up.
+inline float curveTone(const float* pts, float d, bool smooth) {
+    const float x = clampv(d, 0.0f, 1.0f) * 7.0f;
+    const int i = std::min(static_cast<int>(x), 6);
+    const float t = x - i;
+    const float p1 = pts[i], p2 = pts[i + 1];
+    if (!smooth) return clampv(p1 + (p2 - p1) * t, 0.0f, 1.0f);
+    // Beyond the ends the curve continues in a straight line, so a straight ramp stays straight.
+    const float p0 = i > 0 ? pts[i - 1] : 2.0f * pts[0] - pts[1];
+    const float p3 = i < 6 ? pts[i + 2] : 2.0f * pts[7] - pts[6];
+    const float v = 0.5f * ((2.0f * p1) + (-p0 + p2) * t + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t * t +
+                            (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t * t * t);
+    return clampv(v, 0.0f, 1.0f);
+}
+
 // In-place box blur of an interleaved float image (running mean, edges clamped), `passes` times.
 inline void boxBlurImage(std::vector<float>& img, int w, int h, int channels, int radius, int passes = 3) {
     if (radius < 1 || w < 1 || h < 1) return;

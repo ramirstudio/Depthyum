@@ -50,7 +50,7 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
     PF_ParamDef def;
 
     AEFX_CLR_STRUCT(def);
-    PF_ADD_POPUP("Output", 6, 1, "Depth Map|Colormap|Overlay|Source|Depth Scan|Scan Color", ID_VIEW);
+    PF_ADD_POPUP("Output", 6, 1, "Depth Map|Colormap|Overlay|Source|Focus Map|Focus Color", ID_VIEW);
 
     AEFX_CLR_STRUCT(def);
     PF_ADD_TOPIC("Depth Source", ID_SRC_TOPIC);
@@ -88,10 +88,50 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
     AEFX_CLR_STRUCT(def);
     PF_END_TOPIC(ID_DEPTH_TOPIC_END);
 
-    // Depth Scan: a wave over depth whose phase moves with time. Used by the Depth Scan and
-    // Scan Color outputs.
+    // Focus: how the depth is mapped to tone. Used by the Focus Map and Focus Color outputs.
     AEFX_CLR_STRUCT(def);
-    PF_ADD_TOPIC("Scan", ID_SCAN_TOPIC);
+    PF_ADD_TOPIC("Focus", ID_SCAN_TOPIC);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POPUP("Mode", 5, 2, "Scan (moving)|Band|Bands (up to 3)|Curve|Gradient", ID_FOCUS_MODE);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Focus Depth", 0, 100, 0, 100, 50, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_FOCUS_DEPTH);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_CHECKBOXX("Focus On Point", FALSE, 0, ID_FOCUS_PICK);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POINT("Focus Point", 50, 50, FALSE, ID_FOCUS_POINT);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POPUP("Bands", 3, 1, "1|2|3", ID_BAND_COUNT);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Band 2 Depth", 0, 100, 0, 100, 25, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_BAND2);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Band 3 Depth", 0, 100, 0, 100, 80, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_BAND3);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Band Width", 0, 100, 0, 100, 6, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_BAND_WIDTH);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Band Softness", 0, 100, 0, 100, 4, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_BAND_SOFT);
+    // Curve: tone for 8 depths spread evenly from far (0%) to near (100%), default a straight ramp.
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 0% (far)", 0, 100, 0, 100, 0, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE0);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 14%", 0, 100, 0, 100, 14.3, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE1);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 29%", 0, 100, 0, 100, 28.6, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE2);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 43%", 0, 100, 0, 100, 42.9, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE3);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 57%", 0, 100, 0, 100, 57.1, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE4);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 71%", 0, 100, 0, 100, 71.4, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE5);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 86%", 0, 100, 0, 100, 85.7, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE6);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Curve at 100% (near)", 0, 100, 0, 100, 100, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_CURVE7);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_CHECKBOXX("Smooth Curve", TRUE, 0, ID_CURVE_SMOOTH);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_CHECKBOXX("Invert Focus", FALSE, 0, ID_FOCUS_INVERT);
+    // Scan: the mapping is a wave over depth whose phase moves with time. In the band modes the
+    // same Speed and Phase move the bands through depth.
     AEFX_CLR_STRUCT(def);
     PF_ADD_FLOAT_SLIDERX("Speed (cycles/s)", -8, 8, -2, 2, 0.5, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0, ID_SCAN_SPEED);
     AEFX_CLR_STRUCT(def);
@@ -141,6 +181,10 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
 
     AEFX_CLR_STRUCT(def);
     PF_ADD_CHECKBOXX("Keep Source Alpha", FALSE, 0, ID_KEEP_ALPHA);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_CHECKBOXX("Compare With Source", FALSE, 0, ID_COMPARE);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_FLOAT_SLIDERX("Split Position", 0, 100, 0, 100, 50, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT, 0, ID_SPLIT);
 
     out_data->num_params = P_COUNT;
     return PF_Err_NONE;
@@ -167,6 +211,14 @@ public:
         }
         checkin(p);
         return v;
+    }
+    void point(int index, double& x, double& y) {
+        x = y = 0;
+        PF_ParamDef p;
+        if (!checkout(index, p)) return;
+        x = FIX_2_FLOAT(p.u.td.x_value);
+        y = FIX_2_FLOAT(p.u.td.y_value);
+        checkin(p);
     }
     // Colour parameter as display-referred 0..1 RGB.
     void color(int index, float* rgb) {
@@ -478,6 +530,22 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
         const float scanGain = static_cast<float>(pr.num(P_SCAN_GAIN));
         const float scanGlow = static_cast<float>(pr.num(P_SCAN_GLOW));
         const double glowRadiusPx = pr.num(P_SCAN_GLOW_RADIUS);
+        const double scanSpeed = pr.num(P_SCAN_SPEED);
+        const int focusMode = static_cast<int>(pr.num(P_FOCUS_MODE)); // 1 scan, 2 band, 3 bands, 4 curve, 5 gradient
+        const float focusDepth = static_cast<float>(pr.num(P_FOCUS_DEPTH) / 100.0);
+        const bool focusPick = pr.num(P_FOCUS_PICK) != 0;
+        double focusPx = 0, focusPy = 0;
+        pr.point(P_FOCUS_POINT, focusPx, focusPy);
+        const int bandCount = std::min(std::max(static_cast<int>(pr.num(P_BAND_COUNT)), 1), 3);
+        float bandCentre[3] = {0, static_cast<float>(pr.num(P_BAND2) / 100.0), static_cast<float>(pr.num(P_BAND3) / 100.0)};
+        const float bandWidth = static_cast<float>(pr.num(P_BAND_WIDTH) / 100.0);
+        const float bandSoft = static_cast<float>(pr.num(P_BAND_SOFT) / 100.0);
+        float curve[8];
+        for (int k = 0; k < 8; ++k) curve[k] = static_cast<float>(pr.num(P_CURVE0 + k) / 100.0);
+        const bool curveSmooth = pr.num(P_CURVE_SMOOTH) != 0;
+        const bool focusInvert = pr.num(P_FOCUS_INVERT) != 0;
+        const bool compare = pr.num(P_COMPARE) != 0;
+        const float splitPct = static_cast<float>(pr.num(P_SPLIT) / 100.0);
         TemporalParams tp;
         tp.tolerance = static_cast<float>(0.01 + 0.29 * pr.num(P_TOLERANCE) / 100.0);
         tp.detectCuts = pr.num(P_CUTS) != 0;
@@ -614,10 +682,46 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
         std::vector<float> scanRgb;
         if (!err && !aiFailed && !depth.empty() && (view == 4 || view == 5)) {
             scanMask.resize(depth.size());
+            // Band centre: the depth under the Focus Point when picking, else the slider. The bands
+            // travel through depth with Phase and Speed and wrap round at the ends.
+            if (focusPick) {
+                const int px = std::min(std::max(static_cast<int>(std::lround(focusPx)), 0), cw - 1);
+                const int py = std::min(std::max(static_cast<int>(std::lround(focusPy)), 0), ch - 1);
+                double acc = 0;
+                int n = 0;
+                for (int yy = std::max(py - 2, 0); yy <= std::min(py + 2, ch - 1); ++yy)
+                    for (int xx = std::max(px - 2, 0); xx <= std::min(px + 2, cw - 1); ++xx) {
+                        acc += depth[static_cast<size_t>(yy) * cw + xx];
+                        ++n;
+                    }
+                bandCentre[0] = n ? static_cast<float>(acc / n) : focusDepth;
+            } else {
+                bandCentre[0] = focusDepth;
+            }
+            const bool moving = scanSpeed != 0.0 || scanPhase != 0.0;
+            if (moving)
+                for (int k = 0; k < 3; ++k) {
+                    const double c = bandCentre[k] - scanPhase; // the same direction as the scan: near to far
+                    bandCentre[k] = static_cast<float>(c - std::floor(c));
+                }
             parallelFor(ch, [&](int y) {
                 for (int x = 0; x < cw; ++x) {
                     const size_t i = static_cast<size_t>(y) * cw + x;
-                    scanMask[i] = scanWave(depth[i], scanFreq, scanPhase, scanShape, scanSharp);
+                    const float d = depth[i];
+                    float m;
+                    switch (focusMode) {
+                    case 2:
+                    case 3: {
+                        const int n = focusMode == 2 ? 1 : bandCount;
+                        m = 0.0f;
+                        for (int k = 0; k < n; ++k) m = std::max(m, bandMask(d, bandCentre[k], bandWidth, bandSoft, moving));
+                        break;
+                    }
+                    case 4: m = curveTone(curve, d, curveSmooth); break;
+                    case 5: m = d; break;
+                    default: m = scanWave(d, scanFreq, scanPhase, scanShape, scanSharp); break;
+                    }
+                    scanMask[i] = focusInvert ? 1.0f - m : m;
                 }
             });
             if (view == 5) {
@@ -681,6 +785,16 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
                                     for (int k = 0; k < 3; ++k) c[k] = srgbDecode(c[k]);
                             }
                             o[0] = c[0] * a; o[1] = c[1] * a; o[2] = c[2] * a; o[3] = a;
+                        }
+                    }
+                    if (compare && !aiFailed && sx >= 0 && sy >= 0 && sx < W && sy < H) {
+                        // Before/after: the picture on the left of the split, the result on the right,
+                        // with a thin line on the handle.
+                        const int lx = sx - lx0;
+                        const int splitX = static_cast<int>(std::lround(cw * splitPct));
+                        if (lx >= 0 && lx < cw) {
+                            if (lx < splitX - 1) in.read(sx, sy, o);
+                            else if (lx <= splitX) { o[0] = o[1] = o[2] = 1.0f; o[3] = 1.0f; }
                         }
                     }
                     out.write(x, y, o);

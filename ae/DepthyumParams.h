@@ -26,7 +26,26 @@ enum {
     P_SMOOTH,
     P_DEPTH_TOPIC_END,
 
-    P_SCAN_TOPIC,
+    P_SCAN_TOPIC,           // shown as "Focus"
+    P_FOCUS_MODE,
+    P_FOCUS_DEPTH,
+    P_FOCUS_PICK,
+    P_FOCUS_POINT,
+    P_BAND_COUNT,
+    P_BAND2,
+    P_BAND3,
+    P_BAND_WIDTH,
+    P_BAND_SOFT,
+    P_CURVE0,
+    P_CURVE1,
+    P_CURVE2,
+    P_CURVE3,
+    P_CURVE4,
+    P_CURVE5,
+    P_CURVE6,
+    P_CURVE7,
+    P_CURVE_SMOOTH,
+    P_FOCUS_INVERT,
     P_SCAN_SPEED,
     P_SCAN_PHASE,
     P_SCAN_FREQ,
@@ -53,6 +72,8 @@ enum {
     P_AI_TOPIC_END,
 
     P_KEEP_ALPHA,
+    P_COMPARE,
+    P_SPLIT,
 
     P_COUNT
 };
@@ -99,7 +120,28 @@ enum {
     ID_DEPTH_LAYER,
     ID_LAYER_POLARITY,
     ID_LAYER_RANGE,
-    ID_SRC_TOPIC_END
+    ID_SRC_TOPIC_END,
+    ID_FOCUS_MODE,
+    ID_FOCUS_DEPTH,
+    ID_FOCUS_PICK,
+    ID_FOCUS_POINT,
+    ID_BAND_COUNT,
+    ID_BAND2,
+    ID_BAND3,
+    ID_BAND_WIDTH,
+    ID_BAND_SOFT,
+    ID_COMPARE,
+    ID_SPLIT,
+    ID_CURVE0,
+    ID_CURVE1,
+    ID_CURVE2,
+    ID_CURVE3,
+    ID_CURVE4,
+    ID_CURVE5,
+    ID_CURVE6,
+    ID_CURVE7,
+    ID_CURVE_SMOOTH,
+    ID_FOCUS_INVERT
 };
 
 // Largest Stability value: frames on each side of the current one that can take part.
@@ -118,4 +160,4 @@ enum { CHECKOUT_CENTER = 1, CHECKOUT_DEPTH_CENTER = 2, CHECKOUT_NEIGHBOUR = 100,
 #define DEPTHYUM_MAJOR   1
 #define DEPTHYUM_MINOR   0
 #define DEPTHYUM_BUG     0
-#define DEPTHYUM_BUILD   3
+#define DEPTHYUM_BUILD   4

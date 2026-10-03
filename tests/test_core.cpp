@@ -206,6 +206,47 @@ void testOutputs() {
     CHECK(c1[0] > c1[2]);                                         // near is red
 }
 
+void testBands() {
+    // Inside the band: 1. Past half-width plus softness: 0. In between: smooth and monotonic.
+    CHECK_NEAR(bandMask(0.5f, 0.5f, 0.1f, 0.1f, false), 1.0, 1e-6);
+    CHECK_NEAR(bandMask(0.54f, 0.5f, 0.1f, 0.1f, false), 1.0, 1e-6);
+    CHECK_NEAR(bandMask(0.8f, 0.5f, 0.1f, 0.1f, false), 0.0, 1e-6);
+    float prev = 1.0f;
+    for (float d = 0.55f; d <= 0.65f; d += 0.01f) {
+        const float v = bandMask(d, 0.5f, 0.1f, 0.1f, false);
+        CHECK(v <= prev + 1e-6f);
+        prev = v;
+    }
+    CHECK_NEAR(bandMask(0.7f, 0.5f, 0.1f, 0.0f, false), 0.0, 1e-6);          // hard edge
+    // Wrap: a band at 0.95 reaches 0.02 only when travelling.
+    CHECK_NEAR(bandMask(0.02f, 0.95f, 0.2f, 0.0f, false), 0.0, 1e-6);
+    CHECK_NEAR(bandMask(0.02f, 0.95f, 0.2f, 0.0f, true), 1.0, 1e-6);
+    CHECK_NEAR(bandMask(0.02f, 0.95f, 0.1f, 0.0f, true), 0.0, 1e-6);          // 0.07 away, half-width 0.05
+}
+
+void testCurve() {
+    const float ramp[8] = {0, 1 / 7.0f, 2 / 7.0f, 3 / 7.0f, 4 / 7.0f, 5 / 7.0f, 6 / 7.0f, 1};
+    for (float d = 0.0f; d <= 1.0f; d += 0.05f) {
+        CHECK_NEAR(curveTone(ramp, d, false), d, 1e-5);          // identity curve
+        CHECK_NEAR(curveTone(ramp, d, true), d, 1e-4);
+    }
+    // Control points are hit exactly, in both interpolations.
+    const float peaks[8] = {0.1f, 0.9f, 0.1f, 0.9f, 0.2f, 0.8f, 0.0f, 1.0f};
+    for (int i = 0; i < 8; ++i) {
+        CHECK_NEAR(curveTone(peaks, i / 7.0f, false), peaks[i], 1e-5);
+        CHECK_NEAR(curveTone(peaks, i / 7.0f, true), peaks[i], 1e-4);
+    }
+    // Between two points the linear curve is the straight line, the spline stays in 0..1.
+    CHECK_NEAR(curveTone(peaks, 0.5f / 7.0f, false), 0.5, 1e-5);
+    for (float d = 0.0f; d <= 1.0f; d += 0.01f) {
+        const float v = curveTone(peaks, d, true);
+        CHECK(v >= 0.0f && v <= 1.0f);
+    }
+    // Out-of-range depth is clamped.
+    CHECK_NEAR(curveTone(peaks, -1.0f, false), 0.1, 1e-6);
+    CHECK_NEAR(curveTone(peaks, 2.0f, false), 1.0, 1e-6);
+}
+
 void testGraySource() {
     depthAISetBackend(fakeNet);
     auto make = [](float base, bool flip) {
@@ -320,6 +361,8 @@ int main() {
     testDeterministicOrder();
     testOutputs();
     testScan();
+    testBands();
+    testCurve();
     testGraySource();
     testResampleAndAdjust();
     depthAISetBackend(nullptr);

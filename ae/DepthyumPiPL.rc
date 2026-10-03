@@ -48,7 +48,7 @@ BEGIN
         0x65564552L,        /* eVER: effect version */
         0L,
         4L,
-        525827L,           /* PF_VERSION(1, 0, 0, PF_Stage_RELEASE, 3) */
+        525828L,           /* PF_VERSION(1, 0, 0, PF_Stage_RELEASE, 4) */
 
         "MIB8",
         0x65494E46L,        /* eINF: info flags */

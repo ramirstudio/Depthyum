@@ -10,13 +10,23 @@ A depth network sees one frame at a time, and its output has its own scale and o
 
 ## Controls
 
-Output: Depth Map (grey), Colormap (blue far, red near), Overlay (picture and colormap half and half), Source (to compare), Depth Scan or Scan Color (see below).
+Output: Depth Map (grey), Colormap (blue far, red near), Overlay (picture and colormap half and half), Source (to compare), Focus Map or Focus Color (see below).
 
 Depth Source: AI Depth (built-in) estimates the depth with Depth Anything V2 inside the plug-in. Depth Layer reads a depth picture you already have, for example a sequence baked with Marigold V2 (see below), from the layer set in Depth Layer. Layer Polarity says whether white is near or far. Layer Range is Use As Is, which keeps the values of the picture (right for the baked sequences, already normalised), or Stabilize Range, which renormalises them like the built-in depth. Stability, Motion Tolerance and Detect Cuts apply to the depth layer's neighbouring frames, and Edge Refine, the Depth controls, Scan and the outputs work the same way. With a depth layer the plug-in needs neither the runtime nor the model.
 
 Depth: Encoding is Disparity (white is near, the usual format of AI depth maps) or Z Distance (white is far, with Near and Far Distance in metres giving the 1/z spacing of a real camera). Invert flips the map. Far Cut and Near Cut clip the ends, Contrast and Shift redistribute it, Smooth blurs it in pixels.
 
-Scan: the depth becomes a wave whose phase moves with time, so a band of the picture lights up and travels from near to far, wraps around and starts again. Depth Scan outputs the wave in grey, to use as a matte or a map. Scan Color tints the picture's own luminance with it: Dark Color where the wave is low, Lit Color where it is high, then Gain and a Glow of the chosen radius. Speed is in cycles per second (negative runs from far to near) and Phase is an angle you can keyframe or drive with an expression; the scan is a function of the layer time, so with a Speed that is a whole number of cycles over the layer's length it loops exactly. Frequency is how many waves fit across the depth range, Shape is Sine, Triangle or Sawtooth, and Sharpness narrows the lit band. The scan works on a still image too.
+Focus: how the depth is mapped to tone, the creative step of treating the depth map as the picture itself rather than as a pass for a blur. Focus Map outputs the mapping in grey and Focus Color tints the picture's own luminance with it (Dark Color where the mapping is low, Lit Color where it is high, then Gain and Glow). Mode chooses the mapping:
+
+- Band isolates one distance: Focus Depth is where it sits (0 far, 100 near), or Focus On Point takes the depth under the Focus Point, so you can click on the subject. Band Width and Band Softness shape it.
+- Bands (up to 3) picks out several distances at once; Band 2 Depth and Band 3 Depth place the others.
+- Curve is a tone curve over depth with 8 control points from far to near (a straight ramp to start with). Several peaks and valleys bring several distances forward at once, and a steep stretch spreads a thin slice of depth over the whole tonal range, which is what makes the forms inside that slice show. Smooth Curve joins the points with a spline instead of straight lines.
+- Gradient is the depth itself as a tone, like a mist pass; the Depth controls (Contrast, Far Cut, Near Cut) shape it.
+- Scan makes the mapping a wave over depth whose phase moves with time, so a band of the picture lights up and travels from near to far, wraps around and starts again. Frequency is how many waves fit across the depth range, Shape is Sine, Triangle or Sawtooth, Sharpness narrows the lit band.
+
+Invert Focus flips the result. Speed (cycles per second, negative runs from far to near) and Phase (an angle you can keyframe or drive with an expression) move the Band and Bands through depth as well, wrapping at the ends; the result is a function of the layer time, so a Speed that is a whole number of cycles over the layer's length loops exactly. The Focus modes work on a still image too, so a photograph can be mapped and animated by keyframing Focus Depth.
+
+Compare With Source puts the picture on the left of a Split Position handle and the result on the right, with a thin line on the handle, to see the photograph and its depth rendition together.
 
 Temporal: Stability is the number of frames on each side that take part (0 turns it off; more is steadier and slower the first time a frame is rendered). Motion Tolerance sets how different a neighbour's depth may be before it stops counting: low keeps moving edges sharp, high smooths harder. Detect Cuts stops the window at a change of shot.
 

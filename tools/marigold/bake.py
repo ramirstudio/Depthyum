@@ -9,7 +9,7 @@ Depthyum reads through Depth Source > Depth Layer.
 
 On Windows run it inside WSL2 with CUDA; the output folder can be a /mnt/c/... path.
 
-  python bake.py --video clip.mp4 --out depth_clip --marigold-dir ~/marigold-v2 \
+  python bake.py --video clip.mp4  # --video also takes a single photograph: it bakes one frame --out depth_clip --marigold-dir ~/marigold-v2 \
                  --marigold-python ~/miniconda3/envs/marigold-v2/bin/python --fps 24
 """
 import argparse
@@ -113,7 +113,7 @@ def main(argv=None):
     p.add_argument("--checkpoint", help="checkpoint directory or repo[/subfolder] (default: the modality's default)")
     p.add_argument("--start", type=float, default=0.0, help="seconds of the video to start from")
     p.add_argument("--duration", type=float, default=0.0, help="seconds to process, 0 = to the end")
-    p.add_argument("--fps", type=float, required=True, help="frame rate of the footage in After Effects")
+    p.add_argument("--fps", type=float, default=24.0, help="frame rate of the footage in After Effects (a still photo gives one frame)")
     p.add_argument("--max-dim", type=int, default=1024, help="long side of the frames given to the model, 0 = native")
     p.add_argument("--infer-size", type=size_wh, help="fixed inference size WxH, multiples of 16")
     p.add_argument("--seed", type=int, default=2025)

@@ -30,7 +30,11 @@ Parameters have indices in panel order (`DepthyumParams.h`) and stable disk IDs,
 
 `tools/marigold/` is the offline side. `bake.py` extracts the frames with ffmpeg, runs Marigold V2's `scripts/infer.py` once on the folder (the model loads once), and `postprocess.py` stabilises the predictions: cut detection on frame thumbnails; for each frame a robust affine fit (`a * d + b`, median start, iteratively reweighted least squares with a floor on the residual scale) onto the previous aligned frame; one range per shot taken from the 10th percentile of the per-frame lows and the 90th of the highs; a motion-adaptive average. Frames are read from the `.npy` files twice, never all at once.
 
-## Depth scan
+## Focus mapping
+
+The Focus Map and Focus Color outputs map the shaped depth d (0 far, 1 near) to a tone m in 0..1 with one of: `scanWave` (a wave of `frac(d * frequency + phase)`), `bandMask` (a band of width and softness around a centre, 1 inside and a smoothstep fall-off outside; with up to three centres the result is their maximum), `curveTone` (8 control points evenly spaced over d, linear or a Catmull-Rom spline with the ends continued in a straight line, clamped to 0..1), or d itself. Phase is the Phase angle over 360 plus Speed times the layer time; for the bands it shifts the centres, wrapping with the circular distance. The tone can be inverted. Focus Map writes m as data; Focus Color multiplies the layer luminance by a colour interpolated between the two colours with m as the weight and adds a glow.
+
+The scan, as the special case:
 
 `scanWave` in `Output.h` maps a depth value d (0 far, 1 near) to `shape(frac(d * frequency + phase))`, with phase = Phase angle / 360 + Speed * layer time in seconds. Because the argument only goes through `frac`, adding a whole cycle to the phase gives the same image, so the loop is exact. The output depends on the layer time with nothing else changing, so the effect carries `PF_OutFlag_NON_PARAM_VARY`; without it After Effects could reuse a cached frame on a still layer. Scan Color multiplies the layer luminance by a colour interpolated between the two colours with the wave as the weight, then adds a box-blurred copy (three passes) for the glow.
 
