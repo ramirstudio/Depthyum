@@ -1,0 +1,23 @@
+Depthyum 1.0 for After Effects (Windows, 64 bit)
+
+Installation
+1. Close After Effects.
+2. Copy all the files of this folder to
+   C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\Depthyum\
+   (create the Depthyum folder if it does not exist; administrator rights are required).
+3. Reopen After Effects. The effect is under Effect > Depthyum > Depthyum.
+
+The files must stay together in the same folder:
+  Depthyum.aex                       the plug-in
+  depthyum_ort.dll                   ONNX Runtime
+  onnxruntime_providers_shared.dll   ONNX Runtime
+  DirectML.dll                       GPU acceleration
+  depthyum_depth.onnx                Depth Anything V2 Small model
+  licenses\                          licenses of the third-party components (keep it)
+
+Without the DLLs or the model the effect shows a solid red frame. The reason is written to
+%TEMP%\depthyum_log.txt.
+
+Requirements: After Effects 2026 (the same SDK Lensyum was built with; earlier versions have not
+been tested), Windows 10 or 11 64 bit, a DirectX 12 GPU for the GPU path (otherwise switch off
+Use GPU and the estimate runs on the CPU, much slower).

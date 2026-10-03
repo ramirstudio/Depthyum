@@ -1,43 +1,66 @@
 # Depthyum
 
-Pannello per After Effects che genera la depth map di un layer video, frame per frame, con Depth Anything V2 in locale. Il risultato è una sequenza PNG a 16 bit in scala di grigi, importata nella composizione con lo stesso timing del layer e agganciata al layer originale.
+Depthyum is an After Effects effect that turns any layer into a depth map, frame by frame, with Depth Anything V2 running locally on the GPU (DirectML). The result is a Z-depth that follows the footage and stays stable from frame to frame, ready to drive a lens blur, fog, relief or any effect that takes a depth layer.
 
-Nella depth map il bianco è vicino e il nero è lontano. Con "Vicino scuro, lontano chiaro" si inverte.
+It is built the same way as Lensyum: a C++17 engine with no dependencies (`core/`), an After Effects SmartFX wrapper (`ae/`, 8, 16 and 32 bpc, Multi-Frame Rendering) and a command-line harness (`tools/`). `ARCHITECTURE.md` describes the internals.
 
-## Installazione
+## Why it is stable
 
-macOS: `./install.sh`. Windows: `.\install.ps1` da PowerShell. Su Windows con GPU NVIDIA, prima dello script, imposta `DEPTHYUM_TORCH_INDEX` all'indice CUDA di pytorch.org; senza, pip installa torch solo CPU.
+A depth network sees one frame at a time, and its output has its own scale and offset on every frame, so a map normalised frame by frame pumps and flickers. Depthyum renders each frame from a window of its neighbours: it reads the layer at 2 × Stability + 1 times, runs the network on each (the results are cached by pixel content, so every frame is estimated once), averages the normalisation range over the window and averages the maps per pixel. A neighbour counts less the further it is in time and the more its depth differs from the current frame's at that pixel, so moving edges are not smeared and only flicker is averaged away. Frames never mix across a cut. The result of a frame depends only on the footage, not on the order frames are rendered in, so previews, renders and Multi-Frame Rendering agree.
 
-Lo script crea `engine/.venv`, installa le dipendenze, collega `extension/` tra le estensioni CEP e abilita `PlayerDebugMode` (serve per le estensioni non firmate). Riavvia After Effects e apri Finestra > Estensioni > Depthyum. Il modello si scarica da Hugging Face al primo uso (Small circa 100 MB).
+## Controls
 
-Richiede After Effects 2020 o successivo e Python 3.9 o successivo.
+Output: Depth Map (grey), Colormap (blue far, red near), Overlay (picture and colormap half and half) or Source, to compare.
 
-## Uso
+Depth: Encoding is Disparity (white is near, the usual format of AI depth maps) or Z Distance (white is far, with Near and Far Distance in metres giving the 1/z spacing of a real camera). Invert flips the map. Far Cut and Near Cut clip the ends, Contrast and Shift redistribute it, Smooth blurs it in pixels.
 
-Seleziona un solo layer video in una composizione e premi "Genera depth map". Il layer deve venire da un file video: precomposizioni, solidi e sequenze di immagini vanno prima renderizzati. Time remap e stretch negativo non sono supportati. Lo stretch positivo sì.
+Temporal: Stability is the number of frames on each side that take part (0 turns it off; more is steadier and slower the first time a frame is rendered). Motion Tolerance sets how different a neighbour's depth may be before it stops counting: low keeps moving edges sharp, high smooths harder. Detect Cuts stops the window at a change of shot.
 
-Le sequenze finiscono in `Depthyum/` accanto al progetto salvato, altrimenti in `~/Depthyum`. Il progetto After Effects le referenzia da lì, quindi non spostarle.
+AI Depth: Detail sets the analysis resolution (Low 392, Medium 518, High 770, Ultra 1022 pixels on the long side). Edge Refine snaps the map to the edges of the image. Use GPU falls back to the CPU when switched off. Input Color says how the layer is encoded: Auto treats 8 and 16 bpc as sRGB and 32 bpc as linear.
 
-Il modello vede un frame alla volta, quindi la depth tremolerebbe. Il motore lo compensa in tre modi: gli estremi di normalizzazione vengono stabilizzati nel tempo dentro ogni inquadratura (gli stacchi si rilevano da soli), una media mobile attenua il flicker dei pixel senza lasciare scie sugli oggetti in movimento, e l'output è a 16 bit per evitare le bande nel blur di profondità.
+Keep Source Alpha leaves the alpha of the layer on the result; otherwise the layer area is opaque.
 
-## Modelli e licenze
+The depth is written as data, without a colour curve, at every bit depth. Work in 16 bpc or 32 bpc to avoid banding when the map drives a blur.
 
-Small è Apache 2.0. Base e Large sono CC BY-NC 4.0, quindi solo uso non commerciale. Se il lavoro è per un cliente, usa Small.
+## Install
 
-## Motore da riga di comando
+The `Depthyum-1.0-win64.zip` package contains the plug-in, ONNX Runtime, DirectML and the depth model. Extract it into `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\Depthyum\` with After Effects closed; the same steps are in `INSTALL.txt` inside the zip. Licenses of the bundled components are in `THIRD_PARTY.md`.
 
-```
-cd engine
-.venv/bin/python -m depthyum run --input clip.mp4 --out out --start 0 --duration 5 --fps 24 --model small
-```
+## Build on Windows
 
-Stampa un evento JSON per riga (`status`, `progress`, `done`, `error`). `--model` accetta anche una cartella locale con un modello Hugging Face già scaricato.
+The setup is the one Lensyum uses: Visual Studio 2022 or later with the "Desktop development with C++" workload, CMake 3.20 or later, the After Effects SDK in `C:\SDK\AfterEffectsSDK`, the NuGet package `Microsoft.ML.OnnxRuntime.DirectML` extracted to `C:\SDK\ort` and `Microsoft.AI.DirectML` extracted to `C:\SDK\dml`.
 
-## Test
+From "x64 Native Tools Command Prompt for VS", in the project folder:
 
 ```
-cd engine && .venv/bin/python -m pytest
-node --test test/*.test.js
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAE_SDK_DIR="C:/SDK/AfterEffectsSDK"
+cmake --build build --target Depthyum
+package.bat
 ```
 
-I test Python usano un modello finto per la pipeline e un Depth Anything a pesi casuali per il percorso dei tensori. I test JS usano stub degli oggetti di After Effects: verificano la logica, non il comportamento reale di AE.
+The result is `build\ae\Depthyum.aex`, and `package.bat` creates `dist\Depthyum-1.0-win64.zip`. `package.bat` takes the depth model from `MODEL`, or reuses the `lensyum_depth.onnx` Lensyum already has in `C:\SDK` or in its install folder.
+
+If the runtime or the model is missing or fails to load, the frame turns solid red and the reason is written to `%TEMP%\depthyum_log.txt`.
+
+## Test the engine without After Effects
+
+```
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
+```
+
+The tests replace the network with a function and check the cache, the cut detection and the temporal fusion on any platform. To try the model:
+
+```
+build/depthyum_cli depth photo.ppm depth.pgm aimodel=depthyum_depth.onnx ort=depthyum_ort.dll
+build/depthyum_cli seq out_ f000.ppm f001.ppm f002.ppm aimodel=depthyum_depth.onnx ort=depthyum_ort.dll radius=3
+```
+
+`seq` writes `out_000.pgm`, `out_001.pgm`, ... each fused with its neighbours like the plug-in does. Options: `aires` (network size), `refine`, `gpu`, `radius`, `tol`.
+
+## Status
+
+Windows only. The engine, the cache and the temporal fusion are tested on Linux, including the ONNX Runtime path against a small Depth Anything-shaped model. The After Effects wrapper has not been built against the SDK or run inside After Effects yet. The temporal filter does not compensate camera motion, so on fast pans the neighbours that move are down-weighted rather than aligned.
+
+License: see LICENSE (all rights reserved). Third-party components keep the licenses listed in THIRD_PARTY.md.

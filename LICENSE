@@ -1,0 +1,19 @@
+Depthyum
+Copyright (c) 2026 RAMIR Studio. All rights reserved.
+
+The Depthyum software (source code, compiled plug-in, documentation and images)
+is the exclusive property of RAMIR Studio.
+
+Anyone who obtains a copy of the compiled plug-in from RAMIR Studio or from an
+authorised reseller may install and use it on their own computers, including for
+commercial work. Without written permission it is not allowed to copy, modify,
+decompile or redistribute the software or its source code, in whole or in part,
+or to sell it, rent it or include it in other products.
+
+The third-party components included in the package (ONNX Runtime, DirectML,
+Depth Anything V2 Small model) remain subject to their own licenses, listed in
+THIRD_PARTY.md.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL RAMIR STUDIO BE LIABLE FOR ANY DAMAGES ARISING FROM
+THE USE OF, OR THE INABILITY TO USE, THE SOFTWARE.
