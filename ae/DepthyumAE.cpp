@@ -53,6 +53,19 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
     PF_ADD_POPUP("Output", 6, 1, "Depth Map|Colormap|Overlay|Source|Depth Scan|Scan Color", ID_VIEW);
 
     AEFX_CLR_STRUCT(def);
+    PF_ADD_TOPIC("Depth Source", ID_SRC_TOPIC);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POPUP("Source", 2, 1, "AI Depth (built-in)|Depth Layer", ID_DEPTH_SOURCE);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_LAYER("Depth Layer", PF_LayerDefault_NONE, ID_DEPTH_LAYER);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POPUP("Layer Polarity", 2, 1, "White Is Near|White Is Far", ID_LAYER_POLARITY);
+    AEFX_CLR_STRUCT(def);
+    PF_ADD_POPUP("Layer Range", 2, 1, "Use As Is|Stabilize Range", ID_LAYER_RANGE);
+    AEFX_CLR_STRUCT(def);
+    PF_END_TOPIC(ID_SRC_TOPIC_END);
+
+    AEFX_CLR_STRUCT(def);
     PF_ADD_TOPIC("Depth", ID_DEPTH_TOPIC);
     AEFX_CLR_STRUCT(def);
     PF_ADD_POPUP("Encoding", 2, 1, "Disparity (white = near)|Z Distance (white = far)", ID_ENCODING);
@@ -290,6 +303,21 @@ bool hasContent(const WorldView& v) {
     return false;
 }
 
+// A depth picture: luminance of the world, unpremultiplied, taken as data (no colour curve).
+GraySource makeGray(const WorldView& v) {
+    GraySource g;
+    g.w = v.width();
+    g.h = v.height();
+    g.get = [v](int x, int y) {
+        float p[4];
+        v.read(x, y, p);
+        float l = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        if (p[3] > 0) l /= p[3];
+        return std::min(std::max(l, 0.0f), 1.0f);
+    };
+    return g;
+}
+
 // ------------------------------------------------------------------------------------
 // Smart render
 // ------------------------------------------------------------------------------------
@@ -347,6 +375,7 @@ PF_Err PreRender(PF_InData* in_data, PF_OutData* out_data, PF_PreRenderExtra* ex
     ParamReader pr(in_data);
     int radius = static_cast<int>(pr.num(P_STABILITY));
     const int view = static_cast<int>(pr.num(P_VIEW));
+    const bool layerMode = pr.num(P_DEPTH_SOURCE) >= 2;
     if (!pr.ok()) return pr.err();
     radius = std::min(std::max(radius, 0), kMaxRadius);
     // Neighbours only matter for views that use the depth, and only when time moves.
@@ -362,12 +391,26 @@ PF_Err PreRender(PF_InData* in_data, PF_OutData* out_data, PF_PreRenderExtra* ex
     PF_CheckoutResult centerRes;
     ERR(extra->cb->checkout_layer(in_data->effect_ref, P_INPUT, CHECKOUT_CENTER, &fullReq,
                                   in_data->current_time, in_data->time_step, in_data->time_scale, &centerRes));
-    for (int k = -radius; k <= radius && !err; ++k) {
-        if (k == 0) continue;
-        PF_CheckoutResult res;
-        ERR(extra->cb->checkout_layer(in_data->effect_ref, P_INPUT, CHECKOUT_NEIGHBOUR + k + kMaxRadius, &fullReq,
-                                      in_data->current_time + k * in_data->time_step, in_data->time_step,
-                                      in_data->time_scale, &res));
+    if (layerMode) {
+        // The depth comes from the Depth Layer: its neighbouring frames matter, the input's do not.
+        PF_CheckoutResult depthRes;
+        ERR(extra->cb->checkout_layer(in_data->effect_ref, P_DEPTH_LAYER, CHECKOUT_DEPTH_CENTER, &fullReq,
+                                      in_data->current_time, in_data->time_step, in_data->time_scale, &depthRes));
+        for (int k = -radius; k <= radius && !err; ++k) {
+            if (k == 0) continue;
+            PF_CheckoutResult res;
+            ERR(extra->cb->checkout_layer(in_data->effect_ref, P_DEPTH_LAYER, CHECKOUT_DEPTH_NEIGHBOUR + k + kMaxRadius, &fullReq,
+                                          in_data->current_time + k * in_data->time_step, in_data->time_step,
+                                          in_data->time_scale, &res));
+        }
+    } else {
+        for (int k = -radius; k <= radius && !err; ++k) {
+            if (k == 0) continue;
+            PF_CheckoutResult res;
+            ERR(extra->cb->checkout_layer(in_data->effect_ref, P_INPUT, CHECKOUT_NEIGHBOUR + k + kMaxRadius, &fullReq,
+                                          in_data->current_time + k * in_data->time_step, in_data->time_step,
+                                          in_data->time_scale, &res));
+        }
     }
     if (err) return err;
 
@@ -401,7 +444,7 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
     const PreRenderData* prd = static_cast<const PreRenderData*>(extra->input->pre_render_data);
     if (!prd) return PF_Err_BAD_CALLBACK_PARAM;
 
-    PF_EffectWorld *inW = nullptr, *outW = nullptr;
+    PF_EffectWorld *inW = nullptr, *outW = nullptr, *depthCenterW = nullptr;
     ERR(extra->cb->checkout_layer_pixels(in_data->effect_ref, CHECKOUT_CENTER, &inW));
     ERR(extra->cb->checkout_output(in_data->effect_ref, &outW));
 
@@ -443,6 +486,9 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
         const bool useGpu = pr.num(P_GPU) != 0;
         const int colorMode = static_cast<int>(pr.num(P_COLOR_MODE));
         const bool keepAlpha = pr.num(P_KEEP_ALPHA) != 0;
+        const bool layerMode = pr.num(P_DEPTH_SOURCE) >= 2;
+        const bool layerWhiteNear = pr.num(P_LAYER_POLARITY) < 2;
+        tp.fixedRange = layerMode && pr.num(P_LAYER_RANGE) < 2;
         ERR(pr.err());
 
         const int W = in.width(), H = in.height();
@@ -466,7 +512,46 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
             cfg.runtimeLib = pluginFolder() + "depthyum_ort.dll";
             cfg.modelPath = pluginFolder() + "depthyum_depth.onnx";
             cfg.useGpu = useGpu;
-            if (depthAIInit(cfg, aiErr)) {
+            if (layerMode) {
+                // Depth from a picture (a sequence baked offline): no network, no runtime files.
+                const int R = prd->radius;
+                std::vector<RawPtr> window(static_cast<size_t>(2 * R + 1));
+                extra->cb->checkout_layer_pixels(in_data->effect_ref, CHECKOUT_DEPTH_CENTER, &depthCenterW);
+                WorldView dv;
+                dv.w = depthCenterW;
+                if (!depthCenterW || pixelFormat(in_data, depthCenterW, dv.fmt) != PF_Err_NONE || !hasContent(dv)) {
+                    aiErr = "Depth Layer is not set, or has no picture at this time";
+                    aiFailed = true;
+                } else if (!depthRawFromGray(makeGray(dv), 1536, layerWhiteNear, window[R], aiErr)) {
+                    aiFailed = true;
+                }
+                for (int k = -R; k <= R && !aiFailed; ++k) {
+                    if (k == 0) continue;
+                    const int id = CHECKOUT_DEPTH_NEIGHBOUR + k + kMaxRadius;
+                    PF_EffectWorld* nW = nullptr;
+                    extra->cb->checkout_layer_pixels(in_data->effect_ref, id, &nW);
+                    if (nW) {
+                        WorldView nv;
+                        nv.w = nW;
+                        if (pixelFormat(in_data, nW, nv.fmt) == PF_Err_NONE && nv.width() == dv.width() && nv.height() == dv.height() && hasContent(nv)) {
+                            std::string nErr;
+                            RawPtr r;
+                            if (depthRawFromGray(makeGray(nv), 1536, layerWhiteNear, r, nErr)) window[R + k] = r;
+                            else logLine("neighbour depth frame skipped: " + nErr);
+                        }
+                        extra->cb->checkin_layer_pixels(in_data->effect_ref, id);
+                    }
+                }
+                if (!aiFailed) {
+                    std::vector<float> fused;
+                    if (fuseTemporal(window, R, tp, fused)) {
+                        resampleDepth(fused, window[R]->w, window[R]->h, depth, cw, ch);
+                    } else {
+                        aiErr = "temporal fusion failed";
+                        aiFailed = true;
+                    }
+                }
+            } else if (depthAIInit(cfg, aiErr)) {
                 const int sides[4] = {392, 518, 770, 1022};
                 const int side = sides[std::min(std::max(detail, 1), 4) - 1];
                 const int R = prd->radius;
@@ -508,7 +593,7 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
 
             if (aiFailed) {
                 // The reason goes to %TEMP%\depthyum_log.txt so a failure is diagnosable.
-                logLine("AI depth failed: " + (aiErr.empty() ? std::string("layer too small") : aiErr) +
+                logLine("Depth failed: " + (aiErr.empty() ? std::string("layer too small") : aiErr) +
                             "\nruntime: " + cfg.runtimeLib + "\nmodel: " + cfg.modelPath,
                         true);
             } else {
@@ -605,6 +690,7 @@ PF_Err SmartRender(PF_InData* in_data, PF_OutData* out_data, PF_SmartRenderExtra
     }
 
     ERR2(extra->cb->checkin_layer_pixels(in_data->effect_ref, CHECKOUT_CENTER));
+    if (depthCenterW) ERR2(extra->cb->checkin_layer_pixels(in_data->effect_ref, CHECKOUT_DEPTH_CENTER));
     return err ? err : err2;
 }
 

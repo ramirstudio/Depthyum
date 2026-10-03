@@ -417,6 +417,80 @@ bool depthAIRaw(const RgbSource& src, int inferLongSide, RawPtr& out, std::strin
     return true;
 }
 
+bool depthRawFromGray(const GraySource& src, int maxSide, bool whiteIsNear, RawPtr& out, std::string& err) {
+    State& S = state();
+    const int w = src.w, h = src.h;
+    if (w < 2 || h < 2 || !src.get) { err = "depth layer too small"; return false; }
+
+    // Resample to at most maxSide on the long side (box average when shrinking, so thin
+    // structures do not alias).
+    const double sc = std::min(1.0, std::max(maxSide, 16) / static_cast<double>(std::max(w, h)));
+    const int nw = std::max(2, static_cast<int>(std::lround(w * sc)));
+    const int nh = std::max(2, static_cast<int>(std::lround(h * sc)));
+    auto raw = std::make_shared<RawDepth>();
+    raw->w = nw;
+    raw->h = nh;
+    raw->data.resize(static_cast<size_t>(nw) * nh);
+    parallelFor(nh, [&](int y) {
+        const int y0 = std::min(h - 1, static_cast<int>(static_cast<double>(y) * h / nh));
+        const int y1 = std::max(y0 + 1, std::min(h, static_cast<int>(static_cast<double>(y + 1) * h / nh)));
+        for (int x = 0; x < nw; ++x) {
+            const int x0 = std::min(w - 1, static_cast<int>(static_cast<double>(x) * w / nw));
+            const int x1 = std::max(x0 + 1, std::min(w, static_cast<int>(static_cast<double>(x + 1) * w / nw)));
+            double acc = 0;
+            for (int yy = y0; yy < y1; ++yy)
+                for (int xx = x0; xx < x1; ++xx) acc += src.get(xx, yy);
+            const float v = static_cast<float>(acc / ((y1 - y0) * (x1 - x0)));
+            raw->data[static_cast<size_t>(y) * nw + x] = whiteIsNear ? v : 1.0f - v;
+        }
+    });
+
+    // Key: the picture itself plus a tag that keeps it apart from network outputs.
+    Hasher hs;
+    hs.add(nw);
+    hs.add(nh);
+    hs.add(static_cast<int>(whiteIsNear));
+    hs.add(0x6772617955ULL);
+    for (size_t i = 0; i < raw->data.size(); i += 3) hs.add(raw->data[i]);
+    raw->key = hs.h;
+
+    {
+        std::lock_guard<std::mutex> lock(S.mtx);
+        if (RawPtr hit = findLocked(S, raw->key)) { out = hit; return true; }
+    }
+
+    {
+        std::vector<float> tmp(raw->data);
+        const size_t n = tmp.size();
+        const size_t iLo = n / 100, iHi = n - 1 - n / 100;
+        std::nth_element(tmp.begin(), tmp.begin() + iLo, tmp.end());
+        raw->lo = tmp[iLo];
+        std::nth_element(tmp.begin() + iLo, tmp.begin() + iHi, tmp.end());
+        raw->hi = tmp[iHi];
+    }
+    // Thumbnail of the depth itself: a cut changes the depth picture as well.
+    raw->thumb.assign(static_cast<size_t>(kThumbW) * kThumbH, 0.0f);
+    {
+        std::vector<int> cnt(raw->thumb.size(), 0);
+        for (int y = 0; y < nh; ++y) {
+            const int by = std::min(kThumbH - 1, y * kThumbH / nh);
+            for (int x = 0; x < nw; ++x) {
+                const int bx = std::min(kThumbW - 1, x * kThumbW / nw);
+                raw->thumb[static_cast<size_t>(by) * kThumbW + bx] += raw->data[static_cast<size_t>(y) * nw + x];
+                cnt[static_cast<size_t>(by) * kThumbW + bx]++;
+            }
+        }
+        for (size_t i = 0; i < raw->thumb.size(); ++i)
+            if (cnt[i]) raw->thumb[i] /= cnt[i];
+    }
+    {
+        std::lock_guard<std::mutex> lock(S.mtx);
+        insertLocked(S, raw);
+    }
+    out = raw;
+    return true;
+}
+
 void adjustDepth(std::vector<float>& d, int w, int h, const DepthAdjust& a) {
     if (w < 1 || h < 1 || d.size() < static_cast<size_t>(w) * h) return;
     const float span = std::max(a.nearPoint - a.farPoint, 0.02f);

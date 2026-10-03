@@ -10,6 +10,7 @@ struct TemporalParams {
     float tolerance = 0.08f;   // depth difference (0..1) beyond which a neighbour stops counting
     bool detectCuts = true;    // never mix frames across a cut
     float cutThreshold = 0.12f; // mean absolute luminance change between thumbnails that counts as a cut
+    bool fixedRange = false;   // the data is already normalised 0..1 (a baked depth picture): use it as is
 };
 
 // True when two consecutive frames belong to different shots.

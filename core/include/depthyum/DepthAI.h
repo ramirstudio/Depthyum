@@ -46,6 +46,17 @@ bool depthAIInit(const DepthAIConfig& cfg, std::string& err);
 // same frame requested again, from this render or from a neighbouring one, costs nothing.
 bool depthAIRaw(const RgbSource& src, int inferLongSide, RawPtr& out, std::string& err);
 
+// Depth that already exists as a picture, for example a sequence baked offline with a heavier model
+// such as Marigold V2. get() returns the luminance 0..1 at a pixel (called from several threads).
+struct GraySource {
+    int w = 0, h = 0;
+    std::function<float(int x, int y)> get;
+};
+
+// Wraps a depth picture as a RawDepth, resampled so its long side is at most maxSide, with larger
+// values meaning nearer (whiteIsNear false flips it). Cached like the network output.
+bool depthRawFromGray(const GraySource& src, int maxSide, bool whiteIsNear, RawPtr& out, std::string& err);
+
 // Replaces ONNX inference with a function (tests, command-line checks). An empty function goes back
 // to ONNX. Clears the cache either way.
 using DepthBackend = std::function<bool(const float* chw, int w, int h, std::vector<float>& out, int& ow, int& oh, std::string& err)>;

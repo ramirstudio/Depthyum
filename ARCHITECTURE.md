@@ -24,6 +24,12 @@ The range is shared because the model's scale and offset change from frame to fr
 
 Parameters have indices in panel order (`DepthyumParams.h`) and stable disk IDs, always appended at the end. The PiPL is pre-generated in `DepthyumPiPL.rc` as in Lensyum and must be kept consistent with the flags in `GlobalSetup`. The plug-in looks for `depthyum_ort.dll` and `depthyum_depth.onnx` next to the `.aex`; if either is missing the frame comes out solid red and the reason is written to `%TEMP%\depthyum_log.txt`.
 
+## Depth from a picture
+
+`depthRawFromGray` turns a depth picture (the luminance of the Depth Layer at a given time) into a `RawDepth`: box-averaged down to at most 1536 pixels on the long side, flipped when white is far, with the same percentiles and thumbnail as a network output, and cached by content under a different tag. After that the temporal fusion is the same; `TemporalParams::fixedRange` makes it take the values as they are instead of renormalising, which is what a baked sequence wants. In this mode `PreRender` checks out the Depth Layer at 2R + 1 times and the input layer only at the current time (it is still needed for edge refinement, the overlay and Scan Color).
+
+`tools/marigold/` is the offline side. `bake.py` extracts the frames with ffmpeg, runs Marigold V2's `scripts/infer.py` once on the folder (the model loads once), and `postprocess.py` stabilises the predictions: cut detection on frame thumbnails; for each frame a robust affine fit (`a * d + b`, median start, iteratively reweighted least squares with a floor on the residual scale) onto the previous aligned frame; one range per shot taken from the 10th percentile of the per-frame lows and the 90th of the highs; a motion-adaptive average. Frames are read from the `.npy` files twice, never all at once.
+
 ## Depth scan
 
 `scanWave` in `Output.h` maps a depth value d (0 far, 1 near) to `shape(frac(d * frequency + phase))`, with phase = Phase angle / 360 + Speed * layer time in seconds. Because the argument only goes through `frac`, adding a whole cycle to the phase gives the same image, so the loop is exact. The output depends on the layer time with nothing else changing, so the effect carries `PF_OutFlag_NON_PARAM_VARY`; without it After Effects could reuse a cached frame on a still layer. Scan Color multiplies the layer luminance by a colour interpolated between the two colours with the wave as the weight, then adds a box-blurred copy (three passes) for the glow.

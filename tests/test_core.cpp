@@ -206,6 +206,60 @@ void testOutputs() {
     CHECK(c1[0] > c1[2]);                                         // near is red
 }
 
+void testGraySource() {
+    depthAISetBackend(fakeNet);
+    auto make = [](float base, bool flip) {
+        GraySource g;
+        g.w = 64; g.h = 36;
+        g.get = [base, flip](int x, int y) {
+            float v = base + 0.5f * (x / 64.0f) + (y > 18 ? 0.0f : 0.05f);
+            v = std::min(std::max(v, 0.0f), 1.0f);
+            return flip ? 1.0f - v : v;
+        };
+        return g;
+    };
+    std::string err;
+    RawPtr a, b, c, d;
+    CHECK(depthRawFromGray(make(0.2f, false), 32, true, a, err));
+    CHECK(a->w == 32 && a->h == 18);
+    CHECK(depthRawFromGray(make(0.2f, false), 32, true, b, err));
+    CHECK(a.get() == b.get());                       // cached
+    CHECK(depthRawFromGray(make(0.2f, true), 32, false, c, err));
+    // White-is-far input flipped gives the same depth as the white-is-near one.
+    double diff = 0;
+    for (size_t i = 0; i < a->data.size(); ++i) diff += std::fabs(a->data[i] - c->data[i]);
+    CHECK(diff / a->data.size() < 1e-5);
+    CHECK(a->hi > a->lo);
+    // Larger values are nearer, and the long side is capped but never enlarged.
+    CHECK(a->data.back() > a->data.front());
+    CHECK(depthRawFromGray(make(0.2f, false), 500, true, d, err));
+    CHECK(d->w == 64 && d->h == 36);
+    // fixedRange keeps the values: a flat 0.3 stays 0.3, not stretched to the full range.
+    GraySource flat; flat.w = 16; flat.h = 16; flat.get = [](int, int) { return 0.3f; };
+    RawPtr f;
+    CHECK(depthRawFromGray(flat, 16, true, f, err));
+    TemporalParams p; p.fixedRange = true;
+    std::vector<float> out;
+    CHECK(fuseTemporal({f}, 0, p, out));
+    CHECK_NEAR(out[0], 0.3, 1e-5);
+    // The same frames with a different gain end up the same only when the range is stabilised.
+    GraySource g1 = make(0.1f, false), g2 = make(0.1f, false);
+    g2.get = [g1](int x, int y) { return 0.5f * g1.get(x, y); };
+    RawPtr r1, r2;
+    CHECK(depthRawFromGray(g1, 32, true, r1, err));
+    CHECK(depthRawFromGray(g2, 32, true, r2, err));
+    std::vector<float> o1, o2;
+    TemporalParams free; free.fixedRange = false; free.tolerance = 0.3f;
+    fuseTemporal({r1}, 0, free, o1);
+    fuseTemporal({r2}, 0, free, o2);
+    CHECK(meanAbsDiff(o1, o2) < 0.02);               // renormalised: gain does not matter
+    TemporalParams fixed; fixed.fixedRange = true;
+    fuseTemporal({r1}, 0, fixed, o1);
+    fuseTemporal({r2}, 0, fixed, o2);
+    CHECK(meanAbsDiff(o1, o2) > 0.05);               // used as is: gain shows
+    depthAISetBackend(nullptr);
+}
+
 void testScan() {
     // Loops exactly: one more cycle of phase gives the same wave, at every depth.
     for (int shape = 0; shape < 3; ++shape)
@@ -266,6 +320,7 @@ int main() {
     testDeterministicOrder();
     testOutputs();
     testScan();
+    testGraySource();
     testResampleAndAdjust();
     depthAISetBackend(nullptr);
     if (g_failed) { std::printf("%d check(s) failed\n", g_failed); return 1; }

@@ -7,6 +7,13 @@ enum {
     P_INPUT = 0,
     P_VIEW,
 
+    P_SRC_TOPIC,
+    P_DEPTH_SOURCE,
+    P_DEPTH_LAYER,
+    P_LAYER_POLARITY,
+    P_LAYER_RANGE,
+    P_SRC_TOPIC_END,
+
     P_DEPTH_TOPIC,
     P_ENCODING,
     P_NEAR,
@@ -86,7 +93,13 @@ enum {
     ID_SCAN_GAIN,
     ID_SCAN_GLOW,
     ID_SCAN_GLOW_RADIUS,
-    ID_SCAN_TOPIC_END
+    ID_SCAN_TOPIC_END,
+    ID_SRC_TOPIC,
+    ID_DEPTH_SOURCE,
+    ID_DEPTH_LAYER,
+    ID_LAYER_POLARITY,
+    ID_LAYER_RANGE,
+    ID_SRC_TOPIC_END
 };
 
 // Largest Stability value: frames on each side of the current one that can take part.
@@ -94,7 +107,8 @@ constexpr int kMaxRadius = 12;
 
 // Checkout IDs shared between PreRender and SmartRender. The centre frame has its own ID; the
 // neighbour at offset k (from -kMaxRadius to kMaxRadius) uses CHECKOUT_NEIGHBOUR + k + kMaxRadius.
-enum { CHECKOUT_CENTER = 1, CHECKOUT_NEIGHBOUR = 100 };
+// The depth layer (Depth Source = Depth Layer) has its own centre ID and neighbours from CHECKOUT_DEPTH_NEIGHBOUR.
+enum { CHECKOUT_CENTER = 1, CHECKOUT_DEPTH_CENTER = 2, CHECKOUT_NEIGHBOUR = 100, CHECKOUT_DEPTH_NEIGHBOUR = 200 };
 
 #define DEPTHYUM_NAME        "Depthyum"
 #define DEPTHYUM_MATCH_NAME  "RAMIR Depthyum"
@@ -104,4 +118,4 @@ enum { CHECKOUT_CENTER = 1, CHECKOUT_NEIGHBOUR = 100 };
 #define DEPTHYUM_MAJOR   1
 #define DEPTHYUM_MINOR   0
 #define DEPTHYUM_BUG     0
-#define DEPTHYUM_BUILD   2
+#define DEPTHYUM_BUILD   3

@@ -13,3 +13,5 @@ The full license texts and notices are in the `licenses` folder of the package: 
 Only the Small variant of Depth Anything V2 is under Apache 2.0; the Base, Large and Giant variants have a non-commercial license and must not be used in its place in a distribution.
 
 The After Effects SDK is needed only to build and is not redistributed.
+
+The optional bake tool in `tools/marigold/` runs Marigold V2 (Huawei Technologies, Apache 2.0, https://github.com/huawei-bayerlab/marigold-v2) from the user's own installation; nothing from it is shipped. Marigold V2 builds on Qwen-Image-Edit-2509, which keeps its own license, to be checked before commercial use.

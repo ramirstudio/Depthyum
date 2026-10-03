@@ -49,6 +49,7 @@ bool fuseTemporal(const std::vector<RawPtr>& frames, int center, const TemporalP
     }
     lo /= wsum;
     hi /= wsum;
+    if (p.fixedRange) { lo = 0.0; hi = 1.0; }
     const float inv = 1.0f / static_cast<float>(std::max(hi - lo, 1e-6));
     const float flo = static_cast<float>(lo);
     const float tau = std::max(p.tolerance, 1e-3f);
